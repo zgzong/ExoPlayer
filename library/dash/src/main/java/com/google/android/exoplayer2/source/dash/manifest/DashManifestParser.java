@@ -39,6 +39,7 @@ import com.google.android.exoplayer2.util.MimeTypes;
 import com.google.android.exoplayer2.util.UriUtil;
 import com.google.android.exoplayer2.util.Util;
 import com.google.android.exoplayer2.util.XmlPullParserUtil;
+import com.google.common.base.Charsets;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -289,6 +290,7 @@ public class DashManifestParser extends DefaultHandler
     ArrayList<Descriptor> inbandEventStreams = new ArrayList<>();
     ArrayList<Descriptor> accessibilityDescriptors = new ArrayList<>();
     ArrayList<Descriptor> roleDescriptors = new ArrayList<>();
+    ArrayList<Descriptor> essentialProperties = new ArrayList<>();
     ArrayList<Descriptor> supplementalProperties = new ArrayList<>();
     List<RepresentationInfo> representationInfos = new ArrayList<>();
 
@@ -317,6 +319,8 @@ public class DashManifestParser extends DefaultHandler
         audioChannels = parseAudioChannelConfiguration(xpp);
       } else if (XmlPullParserUtil.isStartTag(xpp, "Accessibility")) {
         accessibilityDescriptors.add(parseDescriptor(xpp, "Accessibility"));
+      } else if (XmlPullParserUtil.isStartTag(xpp, "EssentialProperty")) {
+        essentialProperties.add(parseDescriptor(xpp, "EssentialProperty"));
       } else if (XmlPullParserUtil.isStartTag(xpp, "SupplementalProperty")) {
         supplementalProperties.add(parseDescriptor(xpp, "SupplementalProperty"));
       } else if (XmlPullParserUtil.isStartTag(xpp, "Representation")) {
@@ -334,11 +338,13 @@ public class DashManifestParser extends DefaultHandler
                 language,
                 roleDescriptors,
                 accessibilityDescriptors,
+                essentialProperties,
                 supplementalProperties,
                 segmentBase,
                 periodDurationMs);
-        contentType = checkContentTypeConsistency(contentType,
-            getContentType(representationInfo.format));
+        contentType =
+            checkContentTypeConsistency(
+                contentType, MimeTypes.getTrackType(representationInfo.format.sampleMimeType));
         representationInfos.add(representationInfo);
       } else if (XmlPullParserUtil.isStartTag(xpp, "SegmentBase")) {
         segmentBase = parseSegmentBase(xpp, (SingleSegmentBase) segmentBase);
@@ -369,14 +375,28 @@ public class DashManifestParser extends DefaultHandler
               inbandEventStreams));
     }
 
-    return buildAdaptationSet(id, contentType, representations, accessibilityDescriptors,
+    return buildAdaptationSet(
+        id,
+        contentType,
+        representations,
+        accessibilityDescriptors,
+        essentialProperties,
         supplementalProperties);
   }
 
-  protected AdaptationSet buildAdaptationSet(int id, int contentType,
-      List<Representation> representations, List<Descriptor> accessibilityDescriptors,
+  protected AdaptationSet buildAdaptationSet(
+      int id,
+      int contentType,
+      List<Representation> representations,
+      List<Descriptor> accessibilityDescriptors,
+      List<Descriptor> essentialProperties,
       List<Descriptor> supplementalProperties) {
-    return new AdaptationSet(id, contentType, representations, accessibilityDescriptors,
+    return new AdaptationSet(
+        id,
+        contentType,
+        representations,
+        accessibilityDescriptors,
+        essentialProperties,
         supplementalProperties);
   }
 
@@ -387,20 +407,6 @@ public class DashManifestParser extends DefaultHandler
             : MimeTypes.BASE_TYPE_VIDEO.equals(contentType) ? C.TRACK_TYPE_VIDEO
                 : MimeTypes.BASE_TYPE_TEXT.equals(contentType) ? C.TRACK_TYPE_TEXT
                     : C.TRACK_TYPE_UNKNOWN;
-  }
-
-  protected int getContentType(Format format) {
-    String sampleMimeType = format.sampleMimeType;
-    if (TextUtils.isEmpty(sampleMimeType)) {
-      return C.TRACK_TYPE_UNKNOWN;
-    } else if (MimeTypes.isVideo(sampleMimeType)) {
-      return C.TRACK_TYPE_VIDEO;
-    } else if (MimeTypes.isAudio(sampleMimeType)) {
-      return C.TRACK_TYPE_AUDIO;
-    } else if (mimeTypeIsRawText(sampleMimeType)) {
-      return C.TRACK_TYPE_TEXT;
-    }
-    return C.TRACK_TYPE_UNKNOWN;
   }
 
   /**
@@ -505,6 +511,7 @@ public class DashManifestParser extends DefaultHandler
       @Nullable String adaptationSetLanguage,
       List<Descriptor> adaptationSetRoleDescriptors,
       List<Descriptor> adaptationSetAccessibilityDescriptors,
+      List<Descriptor> adaptationSetEssentialProperties,
       List<Descriptor> adaptationSetSupplementalProperties,
       @Nullable SegmentBase segmentBase,
       long periodDurationMs)
@@ -522,7 +529,9 @@ public class DashManifestParser extends DefaultHandler
     String drmSchemeType = null;
     ArrayList<SchemeData> drmSchemeDatas = new ArrayList<>();
     ArrayList<Descriptor> inbandEventStreams = new ArrayList<>();
-    ArrayList<Descriptor> supplementalProperties = new ArrayList<>();
+    ArrayList<Descriptor> essentialProperties = new ArrayList<>(adaptationSetEssentialProperties);
+    ArrayList<Descriptor> supplementalProperties =
+        new ArrayList<>(adaptationSetSupplementalProperties);
 
     boolean seenFirstBaseUrl = false;
     do {
@@ -555,6 +564,8 @@ public class DashManifestParser extends DefaultHandler
         }
       } else if (XmlPullParserUtil.isStartTag(xpp, "InbandEventStream")) {
         inbandEventStreams.add(parseDescriptor(xpp, "InbandEventStream"));
+      } else if (XmlPullParserUtil.isStartTag(xpp, "EssentialProperty")) {
+        essentialProperties.add(parseDescriptor(xpp, "EssentialProperty"));
       } else if (XmlPullParserUtil.isStartTag(xpp, "SupplementalProperty")) {
         supplementalProperties.add(parseDescriptor(xpp, "SupplementalProperty"));
       } else {
@@ -576,6 +587,7 @@ public class DashManifestParser extends DefaultHandler
             adaptationSetRoleDescriptors,
             adaptationSetAccessibilityDescriptors,
             codecs,
+            essentialProperties,
             supplementalProperties);
     segmentBase = segmentBase != null ? segmentBase : new SingleSegmentBase();
 
@@ -596,77 +608,44 @@ public class DashManifestParser extends DefaultHandler
       List<Descriptor> roleDescriptors,
       List<Descriptor> accessibilityDescriptors,
       @Nullable String codecs,
+      List<Descriptor> essentialProperties,
       List<Descriptor> supplementalProperties) {
-    String sampleMimeType = getSampleMimeType(containerMimeType, codecs);
+    @Nullable String sampleMimeType = getSampleMimeType(containerMimeType, codecs);
+    if (MimeTypes.AUDIO_E_AC3.equals(sampleMimeType)) {
+      sampleMimeType = parseEac3SupplementalProperties(supplementalProperties);
+    }
     @C.SelectionFlags int selectionFlags = parseSelectionFlagsFromRoleDescriptors(roleDescriptors);
     @C.RoleFlags int roleFlags = parseRoleFlagsFromRoleDescriptors(roleDescriptors);
     roleFlags |= parseRoleFlagsFromAccessibilityDescriptors(accessibilityDescriptors);
-    if (sampleMimeType != null) {
-      if (MimeTypes.AUDIO_E_AC3.equals(sampleMimeType)) {
-        sampleMimeType = parseEac3SupplementalProperties(supplementalProperties);
+    roleFlags |= parseRoleFlagsFromProperties(essentialProperties);
+    roleFlags |= parseRoleFlagsFromProperties(supplementalProperties);
+
+    Format.Builder formatBuilder =
+        new Format.Builder()
+            .setId(id)
+            .setContainerMimeType(containerMimeType)
+            .setSampleMimeType(sampleMimeType)
+            .setCodecs(codecs)
+            .setPeakBitrate(bitrate)
+            .setSelectionFlags(selectionFlags)
+            .setRoleFlags(roleFlags)
+            .setLanguage(language);
+
+    if (MimeTypes.isVideo(sampleMimeType)) {
+      formatBuilder.setWidth(width).setHeight(height).setFrameRate(frameRate);
+    } else if (MimeTypes.isAudio(sampleMimeType)) {
+      formatBuilder.setChannelCount(audioChannels).setSampleRate(audioSamplingRate);
+    } else if (MimeTypes.isText(sampleMimeType)) {
+      int accessibilityChannel = Format.NO_VALUE;
+      if (MimeTypes.APPLICATION_CEA608.equals(sampleMimeType)) {
+        accessibilityChannel = parseCea608AccessibilityChannel(accessibilityDescriptors);
+      } else if (MimeTypes.APPLICATION_CEA708.equals(sampleMimeType)) {
+        accessibilityChannel = parseCea708AccessibilityChannel(accessibilityDescriptors);
       }
-      if (MimeTypes.isVideo(sampleMimeType)) {
-        return Format.createVideoContainerFormat(
-            id,
-            /* label= */ null,
-            containerMimeType,
-            sampleMimeType,
-            codecs,
-            /* metadata= */ null,
-            bitrate,
-            width,
-            height,
-            frameRate,
-            /* initializationData= */ null,
-            selectionFlags,
-            roleFlags);
-      } else if (MimeTypes.isAudio(sampleMimeType)) {
-        return Format.createAudioContainerFormat(
-            id,
-            /* label= */ null,
-            containerMimeType,
-            sampleMimeType,
-            codecs,
-            /* metadata= */ null,
-            bitrate,
-            audioChannels,
-            audioSamplingRate,
-            /* initializationData= */ null,
-            selectionFlags,
-            roleFlags,
-            language);
-      } else if (mimeTypeIsRawText(sampleMimeType)) {
-        int accessibilityChannel;
-        if (MimeTypes.APPLICATION_CEA608.equals(sampleMimeType)) {
-          accessibilityChannel = parseCea608AccessibilityChannel(accessibilityDescriptors);
-        } else if (MimeTypes.APPLICATION_CEA708.equals(sampleMimeType)) {
-          accessibilityChannel = parseCea708AccessibilityChannel(accessibilityDescriptors);
-        } else {
-          accessibilityChannel = Format.NO_VALUE;
-        }
-        return Format.createTextContainerFormat(
-            id,
-            /* label= */ null,
-            containerMimeType,
-            sampleMimeType,
-            codecs,
-            bitrate,
-            selectionFlags,
-            roleFlags,
-            language,
-            accessibilityChannel);
-      }
+      formatBuilder.setAccessibilityChannel(accessibilityChannel);
     }
-    return Format.createContainerFormat(
-        id,
-        /* label= */ null,
-        containerMimeType,
-        sampleMimeType,
-        codecs,
-        bitrate,
-        selectionFlags,
-        roleFlags,
-        language);
+
+    return formatBuilder.build();
   }
 
   protected Representation buildRepresentation(
@@ -675,24 +654,25 @@ public class DashManifestParser extends DefaultHandler
       @Nullable String extraDrmSchemeType,
       ArrayList<SchemeData> extraDrmSchemeDatas,
       ArrayList<Descriptor> extraInbandEventStreams) {
-    Format format = representationInfo.format;
+    Format.Builder formatBuilder = representationInfo.format.buildUpon();
     if (label != null) {
-      format = format.copyWithLabel(label);
+      formatBuilder.setLabel(label);
     }
-    String drmSchemeType = representationInfo.drmSchemeType != null
-        ? representationInfo.drmSchemeType : extraDrmSchemeType;
+    @Nullable String drmSchemeType = representationInfo.drmSchemeType;
+    if (drmSchemeType == null) {
+      drmSchemeType = extraDrmSchemeType;
+    }
     ArrayList<SchemeData> drmSchemeDatas = representationInfo.drmSchemeDatas;
     drmSchemeDatas.addAll(extraDrmSchemeDatas);
     if (!drmSchemeDatas.isEmpty()) {
       filterRedundantIncompleteSchemeDatas(drmSchemeDatas);
-      DrmInitData drmInitData = new DrmInitData(drmSchemeType, drmSchemeDatas);
-      format = format.copyWithDrmInitData(drmInitData);
+      formatBuilder.setDrmInitData(new DrmInitData(drmSchemeType, drmSchemeDatas));
     }
     ArrayList<Descriptor> inbandEventStreams = representationInfo.inbandEventStreams;
     inbandEventStreams.addAll(extraInbandEventStreams);
     return Representation.newInstance(
         representationInfo.revisionId,
-        format,
+        formatBuilder.build(),
         representationInfo.baseUrl,
         representationInfo.segmentBase,
         inbandEventStreams);
@@ -717,7 +697,7 @@ public class DashManifestParser extends DefaultHandler
       indexLength = Long.parseLong(indexRange[1]) - indexStart + 1;
     }
 
-    RangedUri initialization = parent != null ? parent.initialization : null;
+    @Nullable RangedUri initialization = parent != null ? parent.initialization : null;
     do {
       xpp.next();
       if (XmlPullParserUtil.isStartTag(xpp, "Initialization")) {
@@ -862,9 +842,8 @@ public class DashManifestParser extends DefaultHandler
   }
 
   /**
-   * /**
    * Parses a single EventStream node in the manifest.
-   * <p>
+   *
    * @param xpp The current xml parser.
    * @return The {@link EventStream} parsed from this EventStream node.
    * @throws XmlPullParserException If there is any error parsing this node.
@@ -955,7 +934,7 @@ public class DashManifestParser extends DefaultHandler
       throws XmlPullParserException, IOException {
     scratchOutputStream.reset();
     XmlSerializer xmlSerializer = Xml.newSerializer();
-    xmlSerializer.setOutput(scratchOutputStream, C.UTF8_NAME);
+    xmlSerializer.setOutput(scratchOutputStream, Charsets.UTF_8.name());
     // Start reading everything between <Event> and </Event>, and serialize them into an Xml
     // byte array.
     xpp.nextToken();
@@ -1234,6 +1213,18 @@ public class DashManifestParser extends DefaultHandler
   }
 
   @C.RoleFlags
+  protected int parseRoleFlagsFromProperties(List<Descriptor> accessibilityDescriptors) {
+    @C.RoleFlags int result = 0;
+    for (int i = 0; i < accessibilityDescriptors.size(); i++) {
+      Descriptor descriptor = accessibilityDescriptors.get(i);
+      if ("http://dashif.org/guidelines/trickmode".equalsIgnoreCase(descriptor.schemeIdUri)) {
+        result |= C.ROLE_FLAG_TRICK_PLAY;
+      }
+    }
+    return result;
+  }
+
+  @C.RoleFlags
   protected int parseDashRoleSchemeValue(@Nullable String value) {
     if (value == null) {
       return 0;
@@ -1345,41 +1336,17 @@ public class DashManifestParser extends DefaultHandler
       return MimeTypes.getAudioMediaMimeType(codecs);
     } else if (MimeTypes.isVideo(containerMimeType)) {
       return MimeTypes.getVideoMediaMimeType(codecs);
-    } else if (mimeTypeIsRawText(containerMimeType)) {
+    } else if (MimeTypes.isText(containerMimeType)) {
+      if (MimeTypes.APPLICATION_RAWCC.equals(containerMimeType)) {
+        // RawCC is special because it's a text specific container format.
+        return MimeTypes.getTextMediaMimeType(codecs);
+      }
+      // All other text types are raw formats.
       return containerMimeType;
     } else if (MimeTypes.APPLICATION_MP4.equals(containerMimeType)) {
-      if (codecs != null) {
-        if (codecs.startsWith("stpp")) {
-          return MimeTypes.APPLICATION_TTML;
-        } else if (codecs.startsWith("wvtt")) {
-          return MimeTypes.APPLICATION_MP4VTT;
-        }
-      }
-    } else if (MimeTypes.APPLICATION_RAWCC.equals(containerMimeType)) {
-      if (codecs != null) {
-        if (codecs.contains("cea708")) {
-          return MimeTypes.APPLICATION_CEA708;
-        } else if (codecs.contains("eia608") || codecs.contains("cea608")) {
-          return MimeTypes.APPLICATION_CEA608;
-        }
-      }
-      return null;
+      return MimeTypes.getMediaMimeType(codecs);
     }
     return null;
-  }
-
-  /**
-   * Returns whether a mimeType is a text sample mimeType.
-   *
-   * @param mimeType The mimeType.
-   * @return Whether the mimeType is a text sample mimeType.
-   */
-  private static boolean mimeTypeIsRawText(@Nullable String mimeType) {
-    return MimeTypes.isText(mimeType)
-        || MimeTypes.APPLICATION_TTML.equals(mimeType)
-        || MimeTypes.APPLICATION_MP4VTT.equals(mimeType)
-        || MimeTypes.APPLICATION_CEA708.equals(mimeType)
-        || MimeTypes.APPLICATION_CEA608.equals(mimeType);
   }
 
   /**
