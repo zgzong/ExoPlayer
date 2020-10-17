@@ -101,8 +101,10 @@ import nagra.otv.sdk.hls.PRMAes128DataSource;
             mediaSegment.byterangeLength,
             /* key= */ null);
     boolean mediaSegmentEncrypted = mediaSegmentKey != null;
-    byte[] mediaSegmentIv = 
-        mediaSegmentEncrypted ? getEncryptionIvArray(Assertions.checkNotNull(mediaSegment.encryptionIV)) : null;
+    byte[] mediaSegmentIv =
+        mediaSegmentEncrypted
+            ? getEncryptionIvArray(Assertions.checkNotNull(mediaSegment.encryptionIV))
+            : null;
     DataSource mediaDataSource = buildPRMDataSource(dataSource, dataSpec, mediaSegmentKey, mediaSegmentIv, mediaSegmentKeyUri);
 
     // Init segment.

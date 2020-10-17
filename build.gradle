@@ -13,8 +13,14 @@
 // limitations under the License.
 buildscript {
     repositories {
-        google()
-        jcenter()
+     maven {
+       url "http://cwm-nmp-proxy.hq.k.grp/artifactory/uex-repo/google-mvn-remote/"
+     }
+     jcenter() {
+       url "http://cwm-nmp-proxy.hq.k.grp/artifactory/uex-repo/jcenter-mvn-remote/"
+     }
+     google()
+     jcenter()
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:3.5.1'
@@ -24,8 +30,14 @@ buildscript {
 }
 allprojects {
     repositories {
-        google()
-        jcenter()
+     maven {
+       url "http://cwm-nmp-proxy.hq.k.grp/artifactory/uex-repo/google-mvn-remote/"
+     }
+     jcenter() {
+       url "http://cwm-nmp-proxy.hq.k.grp/artifactory/uex-repo/jcenter-mvn-remote/"
+     }
+     google()
+     jcenter()
     }
     project.ext {
         exoplayerPublishEnabled = false

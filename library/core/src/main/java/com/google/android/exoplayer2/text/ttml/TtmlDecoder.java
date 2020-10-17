@@ -16,6 +16,8 @@
 package com.google.android.exoplayer2.text.ttml;
 
 import android.text.Layout;
+import android.util.Pair;
+
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.text.Cue;
 import com.google.android.exoplayer2.text.SimpleSubtitleDecoder;
@@ -70,6 +72,7 @@ public final class TtmlDecoder extends SimpleSubtitleDecoder {
   private static final String ATTR_STYLE = "style";
   private static final String ATTR_REGION = "region";
   private static final String ATTR_IMAGE = "backgroundImage";
+  private static final String ATTR_EXTENT = "extent";
 
   private static final Pattern CLOCK_TIME =
       Pattern.compile("^([0-9][0-9]+):([0-9][0-9]):([0-9][0-9])"
@@ -91,6 +94,8 @@ public final class TtmlDecoder extends SimpleSubtitleDecoder {
       new CellResolution(/* columns= */ 32, /* rows= */ 15);
 
   private final XmlPullParserFactory xmlParserFactory;
+
+  private int regionNo = 1;
 
   public TtmlDecoder() {
     super("TtmlDecoder");
@@ -541,6 +546,9 @@ public final class TtmlDecoder extends SimpleSubtitleDecoder {
     String regionId = TtmlNode.ANONYMOUS_REGION_ID;
     String imageId = null;
     String[] styleIds = null;
+    String origin = null;
+    String extent = null;
+
     int attributeCount = parser.getAttributeCount();
     TtmlStyle style = parseStyleAttributes(parser, null);
     for (int i = 0; i < attributeCount; i++) {
@@ -577,16 +585,28 @@ public final class TtmlDecoder extends SimpleSubtitleDecoder {
             imageId = value.substring(1);
           }
           break;
+        case TtmlNode.ATTR_TTS_ORIGIN:
+          if (value != null) {
+            origin = value;
+          }
+          break;
+
+        case TtmlNode.ATTR_TTS_EXTENT:
+          if (value != null) {
+            extent = value;
+          }
+          break;
+
         default:
           // Do nothing.
           break;
       }
     }
     if (parent != null && parent.startTimeUs != C.TIME_UNSET) {
-      if (startTime != C.TIME_UNSET) {
+      if (startTime != C.TIME_UNSET && startTime != parent.startTimeUs) {
         startTime += parent.startTimeUs;
       }
-      if (endTime != C.TIME_UNSET) {
+      if (endTime != C.TIME_UNSET && endTime != parent.endTimeUs) {
         endTime += parent.startTimeUs;
       }
     }
@@ -599,8 +619,69 @@ public final class TtmlDecoder extends SimpleSubtitleDecoder {
         endTime = parent.endTimeUs;
       }
     }
+
+    if(origin != null && extent != null
+        && regionId == TtmlNode.ANONYMOUS_REGION_ID) {
+      //add new region to the map.
+      TtmlRegion ttmlRegion = generateRegionWithParms(origin, extent);
+      if (ttmlRegion != null) {
+        regionMap.put(ttmlRegion.id, ttmlRegion);
+        regionId = ttmlRegion.id;
+      }
+      Log.i(TAG, "Does not define region id in current node, but the origin and extent parameters exist.");
+    }
+
+    if(imageId != null && regionId == TtmlNode.ANONYMOUS_REGION_ID) {
+      //use parent region information
+      regionId = parent.regionId;
+    }
+
     return TtmlNode.buildNode(
         parser.getName(), startTime, endTime, style, styleIds, regionId, imageId);
+  }
+
+  private TtmlRegion generateRegionWithParms(String origin, String extent) {
+    float x = 0, y = 0, width = 0,height = 0;
+    Pair<Float,Float> originPair = parseRegionAttribute(origin);
+    if(originPair != null){
+      x = originPair.first.floatValue();
+      y = originPair.second.floatValue();
+    }
+
+    Pair<Float,Float> extentPair = parseRegionAttribute(extent);
+    if(extentPair != null){
+      width = extentPair.first.floatValue();
+      height = extentPair.second.floatValue();
+    }
+
+    String newRegionId = "SubtitleRegionId" + regionNo;
+    regionNo++;
+    float regionTextHeight = 1.0f / DEFAULT_CELL_RESOLUTION.rows;
+    return new TtmlRegion(
+        newRegionId,
+        x,
+        y,
+        /* lineType= */ Cue.LINE_TYPE_FRACTION,
+        Cue.ANCHOR_TYPE_START,
+        width,
+        height,
+        /* textSizeType= */ Cue.TEXT_SIZE_TYPE_FRACTIONAL_IGNORE_PADDING,
+        /* textSize= */ regionTextHeight);
+
+  }
+
+  private Pair<Float,Float> parseRegionAttribute(String xData){
+    Matcher percentageMatcher = PERCENTAGE_COORDINATES.matcher(xData);
+    if (percentageMatcher.matches()) {
+      try {
+        float first = Float.parseFloat(percentageMatcher.group(1)) / 100f;
+        float second = Float.parseFloat(percentageMatcher.group(2)) / 100f;
+        return new Pair<>(first,second);
+      } catch (NumberFormatException e) {
+        Log.w(TAG, "Ignoring region with malformed region data: " + xData);
+      }
+    }
+    return null;
   }
 
   private static boolean isSupportedTag(String tag) {

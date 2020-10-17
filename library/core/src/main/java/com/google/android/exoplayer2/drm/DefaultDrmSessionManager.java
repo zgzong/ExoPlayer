@@ -28,6 +28,7 @@ import com.google.android.exoplayer2.util.EventDispatcher;
 import com.google.android.exoplayer2.util.Log;
 import com.google.android.exoplayer2.util.Util;
 import com.google.protobuf.InvalidProtocolBufferException;
+
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -376,17 +377,6 @@ public class DefaultDrmSessionManager<T extends ExoMediaCrypto> implements DrmSe
     sessions = new ArrayList<>();
     provisioningSessions = new ArrayList<>();
     keyListsPerSessionIdMap = new HashMap<>();
-    if (multiSession && C.WIDEVINE_UUID.equals(uuid) && Util.SDK_INT >= 19) {
-      // TODO: Enabling session sharing probably doesn't do anything useful here. It would only be
-      // useful if DefaultDrmSession instances were aware of one another's state, which is not
-      // implemented. Or if custom renderers are being used that allow playback to proceed before
-      // keys, which seems unlikely to be true in practice.
-      exoMediaDrmProvider.acquireExoMediaDrm(uuid).setPropertyString("sessionSharing", "enable");
-    }
-    exoMediaDrmProvider.acquireExoMediaDrm(uuid).setOnEventListener(new MediaDrmEventListener());
-    if (Util.SDK_INT >= 23) {
-      exoMediaDrmProvider.acquireExoMediaDrm(uuid).setOnKeyStatusChangeListener(new MediaDrmOnKeyStatusChangeListener());
-    }
   }
 
   /**
@@ -449,6 +439,9 @@ public class DefaultDrmSessionManager<T extends ExoMediaCrypto> implements DrmSe
       Assertions.checkState(exoMediaDrm == null);
       exoMediaDrm = exoMediaDrmProvider.acquireExoMediaDrm(uuid);
       exoMediaDrm.setOnEventListener(new MediaDrmEventListener());
+      if (Util.SDK_INT >= 23) {
+        exoMediaDrm.setOnKeyStatusChangeListener(new MediaDrmOnKeyStatusChangeListener());
+      }
     }
   }
 
@@ -605,6 +598,7 @@ public class DefaultDrmSessionManager<T extends ExoMediaCrypto> implements DrmSe
   }
 
   private void onSessionReleased(DefaultDrmSession<T> drmSession) {
+    keyListsPerSessionIdMap.remove(findSessionIdForSession(drmSession));
     sessions.remove(drmSession);
     if (placeholderDrmSession == drmSession) {
       placeholderDrmSession = null;
@@ -684,8 +678,8 @@ public class DefaultDrmSessionManager<T extends ExoMediaCrypto> implements DrmSe
       WidevinePsshDataBuilderParser.WidevinePsshData parsedPsshBox = null;
       try {
         parsedPsshBox = WidevinePsshDataBuilderParser.WidevinePsshData.parseFrom(PsshAtomUtil.parseSchemeSpecificData(sd.data, uuid));
-        for (int i = 0; i < parsedPsshBox.getKeyIdCount(); ++i) {
-          keyIds.add(parsedPsshBox.getKeyId(i).toByteArray());
+        for (int i = 0; i < parsedPsshBox.getKeyIdsCount(); ++i) {
+          keyIds.add(parsedPsshBox.getKeyIds(i).toByteArray());
         }
       } catch (InvalidProtocolBufferException e) {
         Log.e(TAG, "Failed to parse PSSH block", e);
@@ -784,7 +778,6 @@ public class DefaultDrmSessionManager<T extends ExoMediaCrypto> implements DrmSe
   }
 
   private class MediaDrmEventListener implements OnEventListener<T> {
-
     @Override
     public void onEvent(
         ExoMediaDrm<? extends T> md,
@@ -810,5 +803,4 @@ public class DefaultDrmSessionManager<T extends ExoMediaCrypto> implements DrmSe
           added ? "added" : "replaced"));
     }
   }
-
 }

@@ -15,6 +15,13 @@
  */
 package com.google.android.exoplayer2.offline;
 
+import android.content.Context;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Message;
+import android.util.SparseIntArray;
+import androidx.annotation.Nullable;
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.ExoPlaybackException;
 import com.google.android.exoplayer2.RendererCapabilities;
@@ -48,26 +55,15 @@ import com.google.android.exoplayer2.upstream.DefaultAllocator;
 import com.google.android.exoplayer2.upstream.TransferListener;
 import com.google.android.exoplayer2.util.Assertions;
 import com.google.android.exoplayer2.util.Util;
-
-import org.checkerframework.checker.nullness.compatqual.NullableType;
-import org.checkerframework.checker.nullness.qual.EnsuresNonNull;
-import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
-import org.checkerframework.checker.nullness.qual.RequiresNonNull;
-
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
-import android.content.Context;
-import android.net.Uri;
-import android.os.Handler;
-import android.os.HandlerThread;
-import android.os.Message;
-import android.util.SparseIntArray;
-
-import androidx.annotation.Nullable;
+import org.checkerframework.checker.nullness.compatqual.NullableType;
+import org.checkerframework.checker.nullness.qual.EnsuresNonNull;
+import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
+import org.checkerframework.checker.nullness.qual.RequiresNonNull;
 
 /**
  * A helper for initializing and removing downloads.
@@ -250,8 +246,8 @@ public final class DownloadHelper {
    * @param dataSourceFactory A {@link DataSource.Factory} used to load the manifest.
    * @param renderersFactory A {@link RenderersFactory} creating the renderers for which tracks are
    *     selected.
-   * @param drmSessionManager An optional {@link DrmSessionManager} used by the renderers created by
-   *     {@code renderersFactory}.
+   * @param drmSessionManager An optional {@link DrmSessionManager}. Used to help determine which
+   *     tracks can be selected.
    * @param trackSelectorParameters {@link DefaultTrackSelector.Parameters} for selecting tracks for
    *     downloading.
    * @return A {@link DownloadHelper} for DASH streams.
@@ -320,8 +316,8 @@ public final class DownloadHelper {
    * @param dataSourceFactory A {@link DataSource.Factory} used to load the playlist.
    * @param renderersFactory A {@link RenderersFactory} creating the renderers for which tracks are
    *     selected.
-   * @param drmSessionManager An optional {@link DrmSessionManager} used by the renderers created by
-   *     {@code renderersFactory}.
+   * @param drmSessionManager An optional {@link DrmSessionManager}. Used to help determine which
+   *     tracks can be selected.
    * @param trackSelectorParameters {@link DefaultTrackSelector.Parameters} for selecting tracks for
    *     downloading.
    * @return A {@link DownloadHelper} for HLS streams.
@@ -390,8 +386,8 @@ public final class DownloadHelper {
    * @param dataSourceFactory A {@link DataSource.Factory} used to load the manifest.
    * @param renderersFactory A {@link RenderersFactory} creating the renderers for which tracks are
    *     selected.
-   * @param drmSessionManager An optional {@link DrmSessionManager} used by the renderers created by
-   *     {@code renderersFactory}.
+   * @param drmSessionManager An optional {@link DrmSessionManager}. Used to help determine which
+   *     tracks can be selected.
    * @param trackSelectorParameters {@link DefaultTrackSelector.Parameters} for selecting tracks for
    *     downloading.
    * @return A {@link DownloadHelper} for SmoothStreaming streams.
@@ -419,27 +415,27 @@ public final class DownloadHelper {
 
   /**
    * Equivalent to {@link #createMediaSource(DownloadRequest, Factory, DrmSessionManager)
-   * createMediaSource(downloadRequest, dataSourceFactory,
-   * DrmSessionManager.getDummyDrmSessionManager())}.
+   * createMediaSource(downloadRequest, dataSourceFactory, null)}.
    */
   public static MediaSource createMediaSource(
       DownloadRequest downloadRequest, DataSource.Factory dataSourceFactory) {
-    return createMediaSource(
-        downloadRequest, dataSourceFactory, DrmSessionManager.getDummyDrmSessionManager());
+    return createMediaSource(downloadRequest, dataSourceFactory, /* drmSessionManager= */ null);
   }
 
   /**
-   * Utility method to create a MediaSource which only contains the tracks defined in {@code
+   * Utility method to create a {@link MediaSource} that only exposes the tracks defined in {@code
    * downloadRequest}.
    *
    * @param downloadRequest A {@link DownloadRequest}.
    * @param dataSourceFactory A factory for {@link DataSource}s to read the media.
-   * @return A MediaSource which only contains the tracks defined in {@code downloadRequest}.
+   * @param drmSessionManager An optional {@link DrmSessionManager} to be passed to the {@link
+   *     MediaSource}.
+   * @return A {@link MediaSource} that only exposes the tracks defined in {@code downloadRequest}.
    */
   public static MediaSource createMediaSource(
       DownloadRequest downloadRequest,
       DataSource.Factory dataSourceFactory,
-      DrmSessionManager<?> drmSessionManager) {
+      @Nullable DrmSessionManager<?> drmSessionManager) {
     @Nullable Constructor<? extends MediaSourceFactory> constructor;
     switch (downloadRequest.type) {
       case DownloadRequest.TYPE_DASH:
@@ -930,14 +926,14 @@ public final class DownloadHelper {
     }
     try {
       MediaSourceFactory factory = constructor.newInstance(dataSourceFactory);
-      if (drmSessionManager != null) {
-        factory.setDrmSessionManager(drmSessionManager);
-      }
       if (factory instanceof HlsMediaSource.Factory) {
         // ExoPlayer attempts to read the first chunk to obtain codec info - not possible for PRM.
         // This makes ExoPlayer check the playlist for codec info before attempting to read a chunk,
         // with HlsMediaPeriod changed to handle situations when that info is missing.
         ((HlsMediaSource.Factory) factory).setAllowChunklessPreparation(true);
+      }
+      if (drmSessionManager != null) {
+        factory.setDrmSessionManager(drmSessionManager);
       }
       if (streamKeys != null) {
         factory.setStreamKeys(streamKeys);
@@ -949,7 +945,7 @@ public final class DownloadHelper {
   }
 
   private static final class MediaPreparer
-        implements MediaSourceCaller, MediaPeriod.Callback, Handler.Callback {
+      implements MediaSourceCaller, MediaPeriod.Callback, Handler.Callback {
 
     private static final int MESSAGE_PREPARE_SOURCE = 0;
     private static final int MESSAGE_CHECK_FOR_FAILURE = 1;

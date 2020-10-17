@@ -151,7 +151,6 @@ public final class Cea708Decoder extends CeaDecoder {
   private List<Cue> cues;
   private List<Cue> lastCues;
 
-
   private int lastSequenceNo = -1;
   private int currentWindow;
 
@@ -160,7 +159,7 @@ public final class Cea708Decoder extends CeaDecoder {
   private static final int SERVICE_INPUT_BUFF_SIZE = 128;
   private long inputTimestampUs;// currently processing input buffer timestamp
 
-  // Caption Channel Packet processing related
+  // Caption Channel Packet processing
   private int ccpDataIndex;
   private int ccpSize;
 
@@ -190,7 +189,7 @@ public final class Cea708Decoder extends CeaDecoder {
   // TODO: Retrieve isWideAspectRatio from initializationData and use it.
   public Cea708Decoder(int accessibilityChannel, @Nullable List<byte[]> initializationData) {
     ccData = new ParsableByteArray();
-    selectedServiceNumber = (accessibilityChannel == Format.NO_VALUE) ? 1 : accessibilityChannel;
+    selectedServiceNumber = accessibilityChannel == Format.NO_VALUE ? 1 : accessibilityChannel;
     cueBuilders = new CueBuilder[NUM_WINDOWS];
     for (int i = 0; i < NUM_WINDOWS; i++) {
       cueBuilders[i] = new CueBuilder();
@@ -239,7 +238,6 @@ public final class Cea708Decoder extends CeaDecoder {
       boolean ccValid = (ccTypeAndValid & CC_VALID_FLAG) == CC_VALID_FLAG;
       byte ccData1 = (byte) ccData.readUnsignedByte();
       byte ccData2 = (byte) ccData.readUnsignedByte();
-
       // Ignore any non-CEA-708 data
       if (ccType != DTVCC_PACKET_DATA && ccType != DTVCC_PACKET_START) {
         continue;
@@ -284,23 +282,26 @@ public final class Cea708Decoder extends CeaDecoder {
         ccpDataIndex += 2;
         if (DEBUG) {
           Log.d(TAG, "DTVCC_PACKET_DATA : ccpDataIndex = " + ccpDataIndex);
-      }
+        }
       }
     }
     if (cuesNeedUpdate) {
       updateCues();
-  }
     }
+  }
+
   private void finishCCPacket() {
     ccpDataIndex = 0;
     ccpSize = 0;
     resetServiceBlockState();
   }
+
   private void updateCues() {
     cuesNeedUpdate = false;
     cues = getDisplayCues();
     onNewSubtitleDataAvailable(inputTimestampUs);
-    }
+  }
+
   private void processCCPacket(byte... dtvccPkt) {
     for (int i = 0; i < dtvccPkt.length; i++) {
       switch(serviceBlockProcessingState){
@@ -322,7 +323,7 @@ public final class Cea708Decoder extends CeaDecoder {
         }
         break;
         case SERVICE_BLOCK_EXT_HEADER: {
-      // extended service numbers
+          // extended service numbers
           serviceNumber = (dtvccPkt[i] & 0x3F); // 6 bits
           if (serviceBlockSize != 0) {
             serviceBlockProcessingState = SERVICE_BLOCK_DATA;
@@ -330,7 +331,7 @@ public final class Cea708Decoder extends CeaDecoder {
             if (DEBUG) {
               Log.d(TAG, "SERVICE_BLOCK_EXT_HEADER: serviceNumber = " + serviceNumber +
                       ", serviceBlockSize = " + serviceBlockSize);
-      }
+            }
           } else {
             // reset service block processing state
             serviceBlockProcessingState = SERVICE_BLOCK_HEADER;
@@ -342,12 +343,12 @@ public final class Cea708Decoder extends CeaDecoder {
           serviceBlockDataBufferOffset++;
           if (serviceNumber == selectedServiceNumber) {
             processCCData(dtvccPkt[i]);
-    }
+          }
 
           if (serviceBlockDataBufferOffset == serviceBlockSize) {
             if (DEBUG) {
               Log.d(TAG, "End of Service Block");
-      }
+            }
             resetServiceBlockState();
             if (cuesNeedUpdate) {
               updateCues();
@@ -587,6 +588,7 @@ public final class Cea708Decoder extends CeaDecoder {
 
   private boolean handleC1Command(int command) {
     int window;
+
     switch (command) {
       case COMMAND_CW0:
       case COMMAND_CW1:
@@ -678,8 +680,8 @@ public final class Cea708Decoder extends CeaDecoder {
             builder.setVisibility(!builder.isVisible());
             if (DEBUG) {
               Log.d(TAG, "Toggling window with ID: " + i);
+            }
           }
-        }
         }
         break;
       }
@@ -942,7 +944,6 @@ public final class Cea708Decoder extends CeaDecoder {
     }
     return true;
   }
-
   private void handleSetPenAttributes() {
     // the SetPenAttributes command contains 2 bytes of data
     // first byte
@@ -1071,7 +1072,6 @@ public final class Cea708Decoder extends CeaDecoder {
     cueBuilder.defineWindow(visible, rowLock, columnLock, priority, relativePositioning,
         verticalAnchor, horizontalAnchor, rowCount, columnCount, anchorId, windowStyle, penStyle);
   }
-
   private List<Cue> getDisplayCues() {
     List<Cea708Cue> displayCues = new ArrayList<>();
     for (int i = 0; i < NUM_WINDOWS; i++) {

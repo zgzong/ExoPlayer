@@ -15,6 +15,9 @@
  */
 package com.google.android.exoplayer2;
 
+import android.os.Parcel;
+import android.os.Parcelable;
+import androidx.annotation.Nullable;
 import com.google.android.exoplayer2.drm.DrmInitData;
 import com.google.android.exoplayer2.drm.DrmSession;
 import com.google.android.exoplayer2.drm.ExoMediaCrypto;
@@ -26,11 +29,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-
-import android.os.Parcel;
-import android.os.Parcelable;
-
-import androidx.annotation.Nullable;
 
 /**
  * Representation of a media format.
@@ -197,28 +195,19 @@ public final class Format implements Parcelable {
       float frameRate,
       @Nullable List<byte[]> initializationData,
       @C.SelectionFlags int selectionFlags) {
-    return createVideoContainerFormat(
-        id,
-        /* label= */ null,
-        containerMimeType,
-        sampleMimeType,
-        codecs,
-        /* metadata= */ null,
-        bitrate,
-        width,
-        height,
-        frameRate,
-        initializationData,
-        selectionFlags,
+    Format videoContainerFormat = createVideoContainerFormat(id,
+        /* label= */ null, containerMimeType, sampleMimeType, codecs,
+        /* metadata= */ null, bitrate, width, height, frameRate, initializationData, selectionFlags,
         /* roleFlags= */ 0);
+    return videoContainerFormat;
   }
 
   public static Format createVideoContainerFormat(
       @Nullable String id,
       @Nullable String label,
       @Nullable String containerMimeType,
-      String sampleMimeType,
-      String codecs,
+      @Nullable String sampleMimeType,
+      @Nullable String codecs,
       @Nullable Metadata metadata,
       int bitrate,
       int width,
@@ -673,9 +662,9 @@ public final class Format implements Parcelable {
       @Nullable String codecs,
       int bitrate,
       @C.SelectionFlags int selectionFlags,
-      String language,
+      @Nullable String language,
       int accessibilityChannel,
-      DrmInitData drmInitData) {
+      @Nullable DrmInitData drmInitData) {
     return new Format(
         id,
         /* label= */ null,
@@ -752,6 +741,49 @@ public final class Format implements Parcelable {
   }
 
   // Image.
+
+
+  public static Format createImageContainerFormat(
+      @Nullable String id,
+      @Nullable String label,
+      @Nullable String containerMimeType,
+      @Nullable String sampleMimeType,
+      int bitrate,
+      int width,
+      int height,
+      @C.SelectionFlags int selectionFlags,
+      @C.RoleFlags int roleFlags) {
+    return new Format(
+        id,
+        label,
+        selectionFlags,
+        roleFlags,
+        bitrate,
+        /* codecs= */ null,
+        /* metadata= */ null,
+        containerMimeType,
+        sampleMimeType,
+        /* maxInputSize= */ NO_VALUE,
+        /* initializationData= */ null,
+        /* drmInitData= */ null,
+        OFFSET_SAMPLE_RELATIVE,
+        width,
+        height,
+        /* frameRate= */ NO_VALUE,
+        /* rotationDegrees= */ NO_VALUE,
+        /* pixelWidthHeightRatio= */ NO_VALUE,
+        /* projectionData= */ null,
+        /* stereoMode= */ NO_VALUE,
+        /* colorInfo= */ null,
+        /* channelCount= */ NO_VALUE,
+        /* sampleRate= */ NO_VALUE,
+        /* pcmEncoding= */ NO_VALUE,
+        /* encoderDelay= */ NO_VALUE,
+        /* encoderPadding= */ NO_VALUE,
+        /* language= */ null,
+        /* accessibilityChannel= */ NO_VALUE,
+        /* exoMediaCryptoType= */ null);
+  }
 
   public static Format createImageSampleFormat(
       @Nullable String id,

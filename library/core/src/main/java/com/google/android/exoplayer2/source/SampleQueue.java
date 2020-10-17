@@ -15,6 +15,10 @@
  */
 package com.google.android.exoplayer2.source;
 
+import android.os.Looper;
+import androidx.annotation.CallSuper;
+import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.FormatHolder;
@@ -30,12 +34,6 @@ import com.google.android.exoplayer2.util.MimeTypes;
 import com.google.android.exoplayer2.util.ParsableByteArray;
 import com.google.android.exoplayer2.util.Util;
 import java.io.IOException;
-
-import android.os.Looper;
-
-import androidx.annotation.CallSuper;
-import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
 /** A queue of media samples. */
 public class SampleQueue implements TrackOutput {
@@ -541,7 +539,7 @@ public class SampleQueue implements TrackOutput {
       boolean loadingFinished,
       long decodeOnlyUntilUs,
       SampleExtrasHolder extrasHolder) {
-
+    buffer.waitingForKeys = false;
     // This is a temporary fix for https://github.com/google/ExoPlayer/issues/6155.
     // TODO: Remove it and replace it with a fix that discards samples when writing to the queue.
     boolean hasNextSample;
@@ -575,6 +573,7 @@ public class SampleQueue implements TrackOutput {
     }
 
     if (!mayReadSample(relativeReadIndex)) {
+      buffer.waitingForKeys = true;
       return C.RESULT_NOTHING_READ;
     }
 

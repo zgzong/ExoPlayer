@@ -149,6 +149,8 @@ public final class CacheDataSource implements DataSource {
   private long totalCachedBytesRead;
   private long checkCachePosition;
 
+  private long cachedDataLengthInSpan = C.LENGTH_UNSET;
+
   /**
    * Constructs an instance with default {@link DataSource} and {@link DataSink} instances for
    * reading and writing the cache.
@@ -286,6 +288,15 @@ public final class CacheDataSource implements DataSource {
         }
       }
       openNextSource(false);
+
+      //the cached span length will be used as remaining length
+      //when content length can not be found in metadata
+      //fix D2G issue when upgrading from SDK 5.5 to SDK 5.6
+      if(bytesRemaining == C.LENGTH_UNSET
+          && cachedDataLengthInSpan != C.LENGTH_UNSET
+          && isReadingFromCache()) {
+        bytesRemaining = cachedDataLengthInSpan;
+      }
       return bytesRemaining;
     } catch (Throwable e) {
       handleBeforeThrow(e);
@@ -399,6 +410,7 @@ public final class CacheDataSource implements DataSource {
 
     DataSpec nextDataSpec;
     DataSource nextDataSource;
+    cachedDataLengthInSpan = C.LENGTH_UNSET;
     if (nextSpan == null) {
       // The data is locked in the cache, or we're ignoring the cache. Bypass the cache and read
       // from upstream.
@@ -426,6 +438,7 @@ public final class CacheDataSource implements DataSource {
       // making an HTTP request.
       nextDataSpec = new DataSpec(fileUri, readPosition, filePosition, length, key, flags);
       nextDataSource = cacheReadDataSource;
+      cachedDataLengthInSpan = length;
     } else {
       // Data is not cached, and data is not locked, read from upstream with cache backing.
       long length;

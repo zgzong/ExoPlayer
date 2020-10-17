@@ -343,6 +343,10 @@
     "name": "HLS",
     "samples": [
       {
+        "name" : "HLSV5 Clear VOD Multi Audio",
+        "uri" : "https://otvplayer.nagra.com/vod/hls5/clear/DownloadToGo_WebVTT_MA_Comment/index.m3u8"
+      },
+      {
         "name": "Apple 4x3 basic stream",
         "uri": "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8"
       },

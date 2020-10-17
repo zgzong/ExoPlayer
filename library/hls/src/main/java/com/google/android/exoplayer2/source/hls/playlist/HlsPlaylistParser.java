@@ -19,7 +19,6 @@ import android.net.Uri;
 import android.text.TextUtils;
 import android.util.Base64;
 import androidx.annotation.Nullable;
-
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.ParserException;
@@ -55,7 +54,6 @@ import java.util.Queue;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import org.checkerframework.checker.nullness.qual.EnsuresNonNullIf;
 import org.checkerframework.checker.nullness.qual.PolyNull;
 
@@ -483,17 +481,27 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
           }
           break;
         case TYPE_SUBTITLES:
+          codecs = null;
+          sampleMimeType = null;
+          variant = getVariantWithSubtitleGroup(variants, groupId);
+          if (variant != null) {
+            codecs = Util.getCodecsOfType(variant.format.codecs, C.TRACK_TYPE_TEXT);
+            sampleMimeType = MimeTypes.getMediaMimeType(codecs);
+          }
+          if (sampleMimeType == null) {
+            sampleMimeType = MimeTypes.TEXT_VTT;
+          }
           format =
               Format.createTextContainerFormat(
-                      /* id= */ formatId,
-                      /* label= */ name,
-                      /* containerMimeType= */ MimeTypes.APPLICATION_M3U8,
-                      /* sampleMimeType= */ MimeTypes.TEXT_VTT,
-                      /* codecs= */ null,
-                      /* bitrate= */ Format.NO_VALUE,
-                      selectionFlags,
-                      roleFlags,
-                      language)
+                  /* id= */ formatId,
+                  /* label= */ name,
+                  /* containerMimeType= */ MimeTypes.APPLICATION_M3U8,
+                  sampleMimeType,
+                  codecs,
+                  /* bitrate= */ Format.NO_VALUE,
+                  selectionFlags,
+                  roleFlags,
+                  language)
                   .copyWithMetadata(metadata);
           subtitles.add(new Rendition(uri, format, groupId, name));
           break;
@@ -566,6 +574,17 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
     for (int i = 0; i < variants.size(); i++) {
       Variant variant = variants.get(i);
       if (groupId.equals(variant.videoGroupId)) {
+        return variant;
+      }
+    }
+    return null;
+  }
+
+  @Nullable
+  private static Variant getVariantWithSubtitleGroup(ArrayList<Variant> variants, String groupId) {
+    for (int i = 0; i < variants.size(); i++) {
+      Variant variant = variants.get(i);
+      if (groupId.equals(variant.subtitleGroupId)) {
         return variant;
       }
     }

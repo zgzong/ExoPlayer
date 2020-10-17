@@ -261,7 +261,7 @@ import java.util.TreeSet;
   private void traverseForImage(
       long timeUs, String inheritedRegion, List<Pair<String, String>> regionImageList) {
     String resolvedRegionId = ANONYMOUS_REGION_ID.equals(regionId) ? inheritedRegion : regionId;
-    if (isActive(timeUs) && TAG_DIV.equals(tag) && imageId != null) {
+    if (isActive(timeUs) && (TAG_DIV.equals(tag) || TAG_P.equals(tag)) && imageId != null) {
       regionImageList.add(new Pair<>(resolvedRegionId, imageId));
       return;
     }

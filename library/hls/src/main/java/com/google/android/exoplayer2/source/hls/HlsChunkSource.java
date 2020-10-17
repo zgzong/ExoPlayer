@@ -42,13 +42,10 @@ import com.google.android.exoplayer2.util.Util;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import nagra.otv.sdk.hls.PRMEncryptionKeyChunk;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 
-import nagra.otv.sdk.hls.PRMEncryptionKeyChunk;
-
-/**
- * Source of Hls (possibly adaptive) chunks.
- */
+/** Source of Hls (possibly adaptive) chunks. */
 /* package */ class HlsChunkSource {
 
   /**

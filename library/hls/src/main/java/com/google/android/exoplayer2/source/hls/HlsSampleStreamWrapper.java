@@ -71,8 +71,8 @@ import org.checkerframework.checker.nullness.qual.EnsuresNonNull;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.RequiresNonNull;
 
+import nagra.otv.sdk.hls.PRMDecryptorFactory;
 import nagra.otv.sdk.hls.PRMEncryptionKeyChunk;
-import nagra.otv.sdk.hls.PRMDecryptor;
 
 /**
  * Loads {@link HlsMediaChunk}s obtained from a {@link HlsChunkSource}, and provides
@@ -504,7 +504,7 @@ import nagra.otv.sdk.hls.PRMDecryptor;
     hlsSampleStreams.clear();
     //close descrambling session
     if(!prmKeySignalization.isEmpty()){
-      PRMDecryptor.getInstance().closeDescramblingSession(prmKeySignalization);
+      PRMDecryptorFactory.getDecryptor().closeDescramblingSession(prmKeySignalization);
     }
   }
 
@@ -709,19 +709,19 @@ import nagra.otv.sdk.hls.PRMDecryptor;
     return true;
   }
 
+  @Override
+  public boolean isLoading() {
+    return loader.isLoading();
+  }
+
   private void handleNewKeySignalization(String signalization){
     //check if key change happened
     if(!prmKeySignalization.isEmpty() && prmKeySignalization != signalization){
       //close previous session
-      PRMDecryptor.getInstance().closeDescramblingSession(prmKeySignalization);
+      PRMDecryptorFactory.getDecryptor().closeDescramblingSession(prmKeySignalization);
     }
     prmKeySignalization = signalization;
-    PRMDecryptor.getInstance().openDescramblingSession(prmKeySignalization);
-  }
-
-  @Override
-  public boolean isLoading() {
-    return loader.isLoading();
+    PRMDecryptorFactory.getDecryptor().openDescramblingSession(prmKeySignalization);
   }
 
   @Override
@@ -941,7 +941,6 @@ import nagra.otv.sdk.hls.PRMDecryptor;
     if (isAudioVideo) {
       trackOutput.setDrmInitData(drmInitData);
     }
-    
     trackOutput.setSampleOffsetUs(sampleOffsetUs);
     trackOutput.sourceId(chunkUid);
     trackOutput.setUpstreamFormatChangeListener(this);
@@ -1356,21 +1355,20 @@ import nagra.otv.sdk.hls.PRMDecryptor;
   }
 
   private static final class FormatAdjustingSampleQueue extends SampleQueue {
-    //the input cc data for CC608 and CC08 are same from Extractor,
-    //so we just detect the tracks only in CC708 tracks.
-    private boolean needDetectSampleQueue = false;
-
-    private int ccDetectResult = CeaUtil.CC_INVALID;
-
-    private EventDispatcher eventDispatcher;
 
     private final Map<String, DrmInitData> overridingDrmInitData;
     @Nullable private DrmInitData drmInitData;
 
+    //the input cc data for CC608 and CC08 are same from Extractor,
+    //so we just detect the tracks only in CC708 tracks.
+    private boolean needDetectSampleQueue = false;
+    private int ccDetectResult = CeaUtil.CC_INVALID;
+    private EventDispatcher eventDispatcher;
+
     public FormatAdjustingSampleQueue(
         Allocator allocator,
         DrmSessionManager<?> drmSessionManager,
-        Map<String, DrmInitData> overridingDrmInitData, 
+        Map<String, DrmInitData> overridingDrmInitData,
         EventDispatcher eventDispatcher) {
       super(allocator, drmSessionManager);
       this.overridingDrmInitData = overridingDrmInitData;
@@ -1384,11 +1382,6 @@ import nagra.otv.sdk.hls.PRMDecryptor;
 
     @Override
     public Format getAdjustedUpstreamFormat(Format format) {
-      if(format != null && format.sampleMimeType != null
-        && format.sampleMimeType.equals(MimeTypes.APPLICATION_CEA708)){
-        needDetectSampleQueue = true;
-      }
-
       @Nullable
       DrmInitData drmInitData = this.drmInitData != null ? this.drmInitData : format.drmInitData;
       if (drmInitData != null) {
@@ -1398,33 +1391,36 @@ import nagra.otv.sdk.hls.PRMDecryptor;
           drmInitData = overridingDrmInitData;
         }
       }
+      if (format != null && format.sampleMimeType != null
+          && format.sampleMimeType.equals(MimeTypes.APPLICATION_CEA708)) {
+        needDetectSampleQueue = true;
+      }
       return super.getAdjustedUpstreamFormat(
           format.copyWithAdjustments(drmInitData, getAdjustedMetadata(format.metadata)));
     }
 
     @Override
     public void sampleData(ParsableByteArray buffer, int length) {
-       if(needDetectSampleQueue){
-         int sampleStartPosition = buffer.getPosition();
-         //detect cc data type
-         int result = CeaUtil.detectCCDataType(buffer);
-         //restore original position
-         buffer.setPosition(sampleStartPosition);
-         if(result != ccDetectResult && result != CeaUtil.CC_INVALID){
-           if(ccDetectResult != CeaUtil.CC_INVALID){
-             ccDetectResult = CeaUtil.CC_608_AND_708_AVAILABLE;
-           } else {
-             ccDetectResult = result;
-           }
-           eventDispatcher.ccTracksChanged(ccDetectResult);
-         }
-
-         if(ccDetectResult == CeaUtil.CC_608_AND_708_AVAILABLE){
-           needDetectSampleQueue  = false;
-         }
-         Log.i(TAG, "The CC detection result is :" + ccDetectResult);
-       }
-       super.sampleData(buffer,length);
+      if (needDetectSampleQueue) {
+        int sampleStartPosition = buffer.getPosition();
+        //detect cc data type
+        int result = CeaUtil.detectCCDataType(buffer);
+        //restore original position
+        buffer.setPosition(sampleStartPosition);
+        if (result != ccDetectResult && result != CeaUtil.CC_INVALID) {
+          if(ccDetectResult != CeaUtil.CC_INVALID){
+            ccDetectResult = CeaUtil.CC_608_AND_708_AVAILABLE;
+          } else {
+            ccDetectResult = result;
+          }
+          eventDispatcher.ccTracksChanged(ccDetectResult);
+        }
+        if (ccDetectResult == CeaUtil.CC_608_AND_708_AVAILABLE) {
+          needDetectSampleQueue  = false;
+        }
+        Log.i(TAG, "The CC detection result is :" + ccDetectResult);
+      }
+      super.sampleData(buffer, length);
     }
 
     /**

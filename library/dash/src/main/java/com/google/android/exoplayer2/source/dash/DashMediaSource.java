@@ -21,7 +21,6 @@ import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.SparseArray;
 import androidx.annotation.Nullable;
-
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.ExoPlayerLibraryInfo;
 import com.google.android.exoplayer2.ParserException;
@@ -56,6 +55,7 @@ import com.google.android.exoplayer2.upstream.TransferListener;
 import com.google.android.exoplayer2.util.Assertions;
 import com.google.android.exoplayer2.util.Log;
 import com.google.android.exoplayer2.util.Util;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -68,7 +68,6 @@ import java.util.Locale;
 import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 
 /** A DASH {@link MediaSource}. */
 public final class DashMediaSource extends BaseMediaSource {
@@ -809,19 +808,20 @@ public final class DashMediaSource extends BaseMediaSource {
     manifestLoadPending &= manifest.dynamic;
     manifestLoadStartTimestampMs = elapsedRealtimeMs - loadDurationMs;
     manifestLoadEndTimestampMs = elapsedRealtimeMs;
-    if (manifest.location != null) {
-      synchronized (manifestUriLock) {
-        // This condition checks that replaceManifestUri wasn't called between the start and end of
-        // this load. If it was, we ignore the manifest location and prefer the manual replacement.
-        @SuppressWarnings("ReferenceEquality")
-        boolean isSameUriInstance = loadable.dataSpec.uri == manifestUri;
-        if (isSameUriInstance) {
-          manifestUri = manifest.location;
-        }
-      }
-    } else {
-      if(loadable.getUri() != null && manifestUri.compareTo(loadable.getUri()) != 0) {
-        synchronized (manifestUriLock) {
+
+    synchronized (manifestUriLock) {
+      // Checks whether replaceManifestUri(Uri) was called to manually replace the URI between the
+      // start and end of this load. If it was then isSameUriInstance evaluates to false, and we
+      // prefer the manual replacement to one derived from the previous request.
+      @SuppressWarnings("ReferenceEquality")
+      boolean isSameUriInstance = loadable.dataSpec.uri == manifestUri;
+      if (isSameUriInstance) {
+        // Replace the manifest URI with one specified by a manifest Location element (if present),
+        // or with the final (possibly redirected) URI. This follows the recommendation in
+        // DASH-IF-IOP 4.3, section 3.2.15.3. See: https://dashif.org/docs/DASH-IF-IOP-v4.3.pdf.
+        manifestUri = manifest.location != null ? manifest.location : loadable.getUri();
+      } else {
+        if (loadable.getUri() != null && manifestUri.compareTo(loadable.getUri()) != 0) {
           Log.i(TAG, "Redirect happened, update manifestUri: " + loadable.getUri().toString());
           manifestUri = loadable.getUri();
         }

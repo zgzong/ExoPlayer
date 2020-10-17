@@ -681,8 +681,10 @@ public final class C {
   public static final int TRACK_TYPE_METADATA = 4;
   /** A type constant for camera motion tracks. */
   public static final int TRACK_TYPE_CAMERA_MOTION = 5;
+  /** A type constant for thumbnails. */
+  public static final int TRACK_TYPE_IMAGE = 6;
   /** A type constant for a dummy or empty track. */
-  public static final int TRACK_TYPE_NONE = 6;
+  public static final int TRACK_TYPE_NONE = 7;
   /**
    * Applications or extensions may define custom {@code TRACK_TYPE_*} constants greater than or
    * equal to this value.
@@ -1026,6 +1028,37 @@ public final class C {
   public static final int NETWORK_TYPE_OTHER = 8;
 
   /**
+   * Mode specifying whether the player should hold a WakeLock and a WifiLock. One of {@link
+   * #WAKE_MODE_NONE}, {@link #WAKE_MODE_LOCAL} and {@link #WAKE_MODE_NETWORK}.
+   */
+  @Documented
+  @Retention(RetentionPolicy.SOURCE)
+  @IntDef({WAKE_MODE_NONE, WAKE_MODE_LOCAL, WAKE_MODE_NETWORK})
+  public @interface WakeMode {}
+  /**
+   * A wake mode that will not cause the player to hold any locks.
+   *
+   * <p>This is suitable for applications that do not play media with the screen off.
+   */
+  public static final int WAKE_MODE_NONE = 0;
+  /**
+   * A wake mode that will cause the player to hold a {@link android.os.PowerManager.WakeLock}
+   * during playback.
+   *
+   * <p>This is suitable for applications that play media with the screen off and do not load media
+   * over wifi.
+   */
+  public static final int WAKE_MODE_LOCAL = 1;
+  /**
+   * A wake mode that will cause the player to hold a {@link android.os.PowerManager.WakeLock} and a
+   * {@link android.net.wifi.WifiManager.WifiLock} during playback.
+   *
+   * <p>This is suitable for applications that play media with the screen off and may load media
+   * over wifi.
+   */
+  public static final int WAKE_MODE_NETWORK = 2;
+
+  /**
    * Track role flags. Possible flag values are {@link #ROLE_FLAG_MAIN}, {@link
    * #ROLE_FLAG_ALTERNATE}, {@link #ROLE_FLAG_SUPPLEMENTARY}, {@link #ROLE_FLAG_COMMENTARY}, {@link
    * #ROLE_FLAG_DUB}, {@link #ROLE_FLAG_EMERGENCY}, {@link #ROLE_FLAG_CAPTION}, {@link
@@ -1051,7 +1084,8 @@ public final class C {
         ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND,
         ROLE_FLAG_ENHANCED_DIALOG_INTELLIGIBILITY,
         ROLE_FLAG_TRANSCRIBES_DIALOG,
-        ROLE_FLAG_EASY_TO_READ
+        ROLE_FLAG_EASY_TO_READ,
+        ROLE_FLAG_TRICK_PLAY
       })
   public @interface RoleFlags {}
   /** Indicates a main track. */
@@ -1097,6 +1131,8 @@ public final class C {
   public static final int ROLE_FLAG_TRANSCRIBES_DIALOG = 1 << 12;
   /** Indicates the track contains a text that has been edited for ease of reading. */
   public static final int ROLE_FLAG_EASY_TO_READ = 1 << 13;
+  /** Indicates the track is intended for trick play. */
+  public static final int ROLE_FLAG_TRICK_PLAY = 1 << 14;
 
   /**
    * Converts a time in microseconds to the corresponding time in milliseconds, preserving

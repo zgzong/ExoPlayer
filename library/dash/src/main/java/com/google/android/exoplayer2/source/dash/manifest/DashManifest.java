@@ -91,6 +91,16 @@ public class DashManifest implements FilterableManifest<DashManifest> {
   private final List<Period> periods;
 
   /**
+   * The raw content of this manifest.
+   */
+  String rawManifest;
+
+  /**
+   * return the raw content of this manifest.
+   */
+  public String getRawManifest(){return rawManifest;}
+
+  /**
    * @deprecated Use {@link #DashManifest(long, long, long, boolean, long, long, long, long,
    *     ProgramInformation, UtcTimingElement, Uri, List)}.
    */
@@ -192,7 +202,7 @@ public class DashManifest implements FilterableManifest<DashManifest> {
       }
     }
     long newDuration = durationMs != C.TIME_UNSET ? durationMs - shiftMs : C.TIME_UNSET;
-    return new DashManifest(
+    DashManifest manifest = new DashManifest(
         availabilityStartTimeMs,
         newDuration,
         minBufferTimeMs,
@@ -205,6 +215,8 @@ public class DashManifest implements FilterableManifest<DashManifest> {
         utcTiming,
         location,
         copyPeriods);
+    manifest.rawManifest = this.rawManifest;
+    return manifest;
   }
 
   private static ArrayList<AdaptationSet> copyAdaptationSets(
@@ -224,9 +236,14 @@ public class DashManifest implements FilterableManifest<DashManifest> {
         key = keys.poll();
       } while (key.periodIndex == periodIndex && key.groupIndex == adaptationSetIndex);
 
-      copyAdaptationSets.add(new AdaptationSet(adaptationSet.id, adaptationSet.type,
-          copyRepresentations, adaptationSet.accessibilityDescriptors,
-          adaptationSet.supplementalProperties));
+      copyAdaptationSets.add(
+          new AdaptationSet(
+              adaptationSet.id,
+              adaptationSet.type,
+              copyRepresentations,
+              adaptationSet.accessibilityDescriptors,
+              adaptationSet.essentialProperties,
+              adaptationSet.supplementalProperties));
     } while(key.periodIndex == periodIndex);
     // Add back the last key which doesn't belong to the period being processed
     keys.addFirst(key);
