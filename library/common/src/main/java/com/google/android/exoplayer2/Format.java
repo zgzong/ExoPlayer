@@ -165,6 +165,13 @@ public final class Format implements Parcelable {
 
     private int accessibilityChannel;
 
+    /**
+     * Indicates if the video is wide aspect ratio (16:9) or not (4:3)
+     * Only influences captions if the lines are not middle aligned.
+     * Values are {@link C#NON_WIDE_ASPECT_RATIO} or {@link C#WIDE_ASPECT_RATIO},
+     */
+    public static final String KEY_ASPECT_RATIO_TYPE = "aspect-ratio-type";
+
     // Provided by the source.
 
     @Nullable private Class<? extends ExoMediaCrypto> exoMediaCryptoType;
@@ -1144,6 +1151,32 @@ public final class Format implements Parcelable {
         .setSelectionFlags(selectionFlags)
         .setSampleMimeType(sampleMimeType)
         .setInitializationData(initializationData)
+        .build();
+  }
+
+  /** @deprecated Use {@link Format.Builder}. */
+  @Deprecated
+  public static Format createImageContainerFormat(
+      @Nullable String id,
+      @Nullable String label,
+      @Nullable String containerMimeType,
+      @Nullable String sampleMimeType,
+      int bitrate,
+      int width,
+      int height,
+      @C.SelectionFlags int selectionFlags,
+      @C.RoleFlags int roleFlags) {
+    return new Builder()
+        .setId(id)
+        .setLabel(label)
+        .setSelectionFlags(selectionFlags)
+        .setRoleFlags(roleFlags)
+        .setAverageBitrate(bitrate)
+        .setPeakBitrate(bitrate)
+        .setContainerMimeType(containerMimeType)
+        .setSampleMimeType(sampleMimeType)
+        .setWidth(width)
+        .setHeight(height)
         .build();
   }
 
