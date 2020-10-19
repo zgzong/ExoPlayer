@@ -80,5 +80,4 @@ public class AdaptationSet {
     this.essentialProperties = Collections.unmodifiableList(essentialProperties);
     this.supplementalProperties = Collections.unmodifiableList(supplementalProperties);
   }
-
 }
